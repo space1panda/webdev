@@ -1,9 +1,7 @@
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 import os
-from datetime import datetime
 
 app = FastAPI()
 
@@ -11,7 +9,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Ensure uploads directory exists
+# Create uploads directory
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -22,30 +20,13 @@ async def root(request: Request):
 @app.post("/upload-audio")
 async def upload_audio(audio: UploadFile = File(...)):
     try:
-        # Generate unique filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"audio_{timestamp}.webm"
-        file_path = os.path.join(UPLOAD_DIR, filename)
-        
-        # Save the file
-        with open(file_path, "wb") as f:
+        filename = f"audio_{audio.filename}"
+        with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
             content = await audio.read()
             f.write(content)
-        
-        return JSONResponse({
-            "status": "success",
-            "filename": filename,
-            "message": "Audio uploaded successfully"
-        })
+        return {"success": True, "filename": filename}
     except Exception as e:
-        return JSONResponse({
-            "status": "error",
-            "message": str(e)
-        }, status_code=500)
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+        return {"success": False, "error": str(e)}
 
 
 if __name__ == "__main__":

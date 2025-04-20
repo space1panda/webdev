@@ -11,148 +11,112 @@
         <h1>Audio Recorder</h1>
         
         <div class="recorder-container">
-            <div id="bubble" class="bubble" role="button" tabindex="0">
-                <div class="bubble-icon"></div>
+            <div id="recordButton" class="record-bubble" role="button" tabindex="0">
+                <div class="bubble-inner"></div>
             </div>
-            <div id="recordingStatus" class="recording-status"></div>
+            <div id="recordingStatus" class="status-text"></div>
         </div>
 
-        <div id="recordings" class="recordings-list"></div>
+        <div id="recordingsList" class="recordings-list"></div>
     </div>
 
     <script>
-        class AudioRecorder {
-            constructor() {
-                this.mediaRecorder = null;
-                this.audioChunks = [];
-                this.isRecording = false;
-                this.bubble = document.getElementById('bubble');
-                this.statusElement = document.getElementById('recordingStatus');
-                this.recordingsList = document.getElementById('recordings');
-                
-                this.setupEventListeners();
-            }
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        
+        const recordButton = document.getElementById('recordButton');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const recordingsList = document.getElementById('recordingsList');
 
-            setupEventListeners() {
-                this.bubble.addEventListener('click', () => this.toggleRecording());
-                this.bubble.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        this.toggleRecording();
-                    }
-                });
-            }
+        recordButton.addEventListener('click', toggleRecording);
 
-            async startRecording() {
+        async function toggleRecording() {
+            if (!isRecording) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    this.mediaRecorder = new MediaRecorder(stream);
-                    this.audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
 
-                    this.mediaRecorder.ondataavailable = (event) => {
-                        this.audioChunks.push(event.data);
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
                     };
 
-                    this.mediaRecorder.onstop = () => this.handleRecordingStop();
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.webm');
 
-                    this.mediaRecorder.start();
-                    this.isRecording = true;
-                    this.updateUI(true);
-                    this.startVisualization(stream);
+                        try {
+                            const response = await fetch('/upload-audio', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            if (response.ok) {
+                                displayRecording(audioBlob);
+                            }
+                        } catch (error) {
+                            console.error('Upload failed:', error);
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordButton.classList.add('recording');
+                    recordingStatus.textContent = 'Recording...';
+                    startVisualization(stream);
                 } catch (error) {
                     console.error('Error accessing microphone:', error);
-                    this.statusElement.textContent = 'Error: Could not access microphone';
+                    recordingStatus.textContent = 'Error: Microphone access denied';
                 }
-            }
-
-            stopRecording() {
-                if (this.mediaRecorder) {
-                    this.mediaRecorder.stop();
-                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
-                    this.isRecording = false;
-                    this.updateUI(false);
-                }
-            }
-
-            async handleRecordingStop() {
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append('audio', audioBlob);
-
-                try {
-                    const response = await fetch('/upload-audio', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (response.ok) {
-                        this.addRecordingToList(audioBlob);
-                    } else {
-                        console.error('Upload failed');
-                    }
-                } catch (error) {
-                    console.error('Error uploading:', error);
-                }
-            }
-
-            addRecordingToList(blob) {
-                const recordingElement = document.createElement('div');
-                recordingElement.className = 'recording-item';
-
-                const audio = document.createElement('audio');
-                audio.controls = true;
-                audio.src = URL.createObjectURL(blob);
-
-                recordingElement.appendChild(audio);
-                this.recordingsList.prepend(recordingElement);
-            }
-
-            updateUI(isRecording) {
-                this.bubble.classList.toggle('recording', isRecording);
-                this.statusElement.textContent = isRecording ? 'Recording...' : '';
-            }
-
-            startVisualization(stream) {
-                const audioContext = new AudioContext();
-                const source = audioContext.createMediaStreamSource(stream);
-                const analyser = audioContext.createAnalyser();
-                
-                source.connect(analyser);
-                analyser.fftSize = 256;
-                
-                const bufferLength = analyser.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                
-                const animate = () => {
-                    if (!this.isRecording) {
-                        this.bubble.style.transform = 'scale(1)';
-                        return;
-                    }
-
-                    analyser.getByteFrequencyData(dataArray);
-                    const average = dataArray.reduce((a, b) => a + b) / bufferLength;
-                    const scale = 1 + (average / 256) * 0.5;
-                    
-                    this.bubble.style.transform = `scale(${scale})`;
-                    requestAnimationFrame(animate);
-                };
-
-                animate();
-            }
-
-            toggleRecording() {
-                if (this.isRecording) {
-                    this.stopRecording();
-                } else {
-                    this.startRecording();
-                }
+            } else {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                isRecording = false;
+                recordButton.classList.remove('recording');
+                recordingStatus.textContent = '';
             }
         }
 
-        // Initialize the recorder when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new AudioRecorder();
-        });
+        function startVisualization(stream) {
+            const audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            
+            source.connect(analyser);
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function animate() {
+                if (!isRecording) {
+                    recordButton.style.transform = 'scale(1)';
+                    return;
+                }
+
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+                const scale = 1 + (average / 256) * 0.3;
+                
+                recordButton.style.transform = `scale(${scale})`;
+                requestAnimationFrame(animate);
+            }
+
+            animate();
+        }
+
+        function displayRecording(blob) {
+            const recording = document.createElement('div');
+            recording.className = 'recording-item';
+            
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = URL.createObjectURL(blob);
+            
+            recording.appendChild(audio);
+            recordingsList.insertBefore(recording, recordingsList.firstChild);
+        }
     </script>
 </body>
 </html>
