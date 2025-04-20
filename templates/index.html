@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text and Audio Input Demo</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>speak up</h1>
+
+        <!-- Audio Recording Section -->
+        <section class="input-section">
+            <h2>Audio Input</h2>
+            <div class="visualizer-container">
+                <div id="bubble" class="bubble" role="button" tabindex="0">
+                    <div class="bubble-icon"></div>
+                </div>
+                <div id="recordingStatus" class="recording-status"></div>
+            </div>
+            <div id="audioList" class="audio-list"></div>
+        </section>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let animationId;
+        
+        const bubble = document.getElementById('bubble');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const audioList = document.getElementById('audioList');
+    
+        // Normalize value to specific range
+        function normalize(value, min, max) {
+            return (value - min) / (max - min);
+        }
+    
+        async function setupAudioAnalyser(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                source.connect(analyser);
+                analyser.fftSize = 32; // Smaller FFT size for more responsive analysis
+                analyser.smoothingTimeConstant = 0.6; // Smoother transitions
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                // Start animation loop
+                animateBubble();
+                console.log("Audio analyser setup complete");
+            } catch (error) {
+                console.error("Error setting up audio analyser:", error);
+            }
+        }
+    
+        function getAudioLevel() {
+            if (!analyser || !dataArray) return 0;
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate RMS (Root Mean Square) value for better volume representation
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += (dataArray[i] / 255.0) ** 2;
+            }
+            const rms = Math.sqrt(sum / dataArray.length);
+            
+            // Apply some amplification to make it more visible
+            return Math.min(rms * 2.5, 1);
+        }
+    
+        function animateBubble() {
+            if (!isRecording) {
+                // Reset bubble state
+                bubble.style.transform = 'scale(1)';
+                bubble.style.boxShadow = '0 0 20px rgba(26, 115, 232, 0.3)';
+                return;
+            }
+    
+            const level = getAudioLevel();
+            
+            // Calculate dynamic scale (between 1 and 1.5)
+            const scale = 1 + (level * 0.5);
+            
+            // Update bubble properties
+            bubble.style.transform = `scale(${scale})`;
+            
+            // Dynamic glow effect
+            const glowSize = 20 + (level * 40);
+            const glowOpacity = 0.3 + (level * 0.4);
+            bubble.style.boxShadow = `0 0 ${glowSize}px rgba(26, 115, 232, ${glowOpacity})`;
+            
+            // Color variation based on intensity
+            const hue = 210 + (level * 30);
+            const saturation = 80 + (level * 20);
+            const lightness = 60 + (level * 20);
+            bubble.style.background = `radial-gradient(circle at 30% 30%, 
+                hsl(${hue}, ${saturation}%, ${lightness}%), 
+                hsl(${hue - 10}, ${saturation - 10}%, ${lightness - 20}%))`;
+    
+            // Console log for debugging
+            if (isRecording) {
+                console.log('Audio Level:', level);
+            }
+    
+            // Continue animation loop
+            animationId = requestAnimationFrame(animateBubble);
+        }
+    
+        async function toggleRecording() {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: false,
+                            channelCount: 1
+                        }
+                    });
+    
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+    
+                    // Set up audio analysis before starting recording
+                    await setupAudioAnalyser(stream);
+    
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+    
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const fileName = `recording_${new Date().getTime()}.webm`;
+                        
+                        const formData = new FormData();
+                        formData.append('audio_file', audioBlob, fileName);
+    
+                        try {
+                            const response = await fetch('/upload-audio', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            const audioElement = document.createElement('audio');
+                            audioElement.controls = true;
+                            audioElement.src = URL.createObjectURL(audioBlob);
+                            
+                            const recordingContainer = document.createElement('div');
+                            recordingContainer.className = 'recording-item';
+                            recordingContainer.appendChild(audioElement);
+                            
+                            audioList.appendChild(recordingContainer);
+                        } catch (error) {
+                            console.error('Error uploading audio:', error);
+                        }
+    
+                        // Cleanup
+                        if (audioContext) {
+                            audioContext.close();
+                        }
+                        cancelAnimationFrame(animationId);
+                    };
+    
+                    mediaRecorder.start(100); // Collect data every 100ms
+                    isRecording = true;
+                    bubble.classList.add('recording');
+                    recordingStatus.textContent = 'Recording...';
+                    console.log("Recording started");
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    recordingStatus.textContent = 'Error: Could not access microphone';
+                }
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                isRecording = false;
+                bubble.classList.remove('recording');
+                recordingStatus.textContent = '';
+                cancelAnimationFrame(animationId);
+                console.log("Recording stopped");
+            }
+        }
+    
+        // Add event listeners
+        bubble.addEventListener('click', toggleRecording);
+        bubble.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleRecording();
+            }
+        });
+    </script>
+</body>
+</html>

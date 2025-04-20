@@ -1,0 +1,236 @@
+/* Base styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f2f5;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Typography */
+h1 {
+    color: #1a73e8;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+h2 {
+    color: #1a73e8;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+/* Input sections */
+.input-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+}
+
+/* Audio visualizer */
+.visualizer-container {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 20px auto;
+}
+
+.bubble {
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle at 30% 30%, #5cabff, #1a73e8);
+    border-radius: 50%;
+    transition: all 0.1s ease-out;
+    box-shadow: 0 0 20px rgba(26, 115, 232, 0.3);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    will-change: transform, box-shadow, background;
+}
+
+.bubble:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(26, 115, 232, 0.4);
+}
+
+.bubble:active {
+    transform: scale(0.95);
+}
+
+.bubble-icon {
+    width: 40px;
+    height: 40px;
+    background-color: #fff;
+    border-radius: 50%;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.bubble.recording .bubble-icon {
+    background-color: #dc3545;
+    transform: scale(0.8);
+}
+
+.recording-status {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #666;
+    height: 20px;
+    text-align: center;
+}
+
+/* Audio recordings list */
+.audio-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.recording-item {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+audio {
+    width: 100%;
+}
+
+/* Accessibility */
+.bubble:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.5);
+}
+
+/* Audio controls */
+audio::-webkit-media-controls-panel {
+    background-color: #f8f9fa;
+}
+
+audio::-webkit-media-controls-play-button {
+    background-color: #1a73e8;
+    border-radius: 50%;
+}
+
+audio::-webkit-media-controls-current-time-display,
+audio::-webkit-media-controls-time-remaining-display {
+    color: #666;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+        margin: 10px;
+    }
+
+    form {
+        flex-direction: column;
+    }
+
+    button {
+        width: 100%;
+    }
+
+    .bubble {
+        width: 80px;
+        height: 80px;
+    }
+
+    .bubble-icon {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    .bubble {
+        transition: none;
+    }
+    
+    .bubble-icon {
+        transition: none;
+    }
+    
+    .bubble:hover {
+        transform: none;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #1a1a1a;
+        color: #fff;
+    }
+
+    .container {
+        background-color: #2d2d2d;
+    }
+
+    .input-section {
+        background-color: #333;
+    }
+
+    input[type="text"] {
+        background-color: #444;
+        color: #fff;
+        border-color: #555;
+    }
+
+    .message {
+        background-color: #333;
+    }
+
+    .recording-item {
+        background-color: #333;
+    }
+
+    .recording-status {
+        color: #aaa;
+    }
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Error states */
+.error {
+    color: #dc3545;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    background-color: rgba(220, 53, 69, 0.1);
+}
